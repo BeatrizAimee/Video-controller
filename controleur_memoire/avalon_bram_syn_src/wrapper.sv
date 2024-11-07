@@ -1,4 +1,4 @@
-
+`timescale 1ns/1ps
 module wrapper(
     input wire clk,
     input wire reset,

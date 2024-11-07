@@ -1,4 +1,5 @@
 #
+SHELL := /bin/bash
 .PHONY: clean all simu_batch compile simu_gui info syn
 
 export PATH:=/comelec/softs/bin:$(PATH)
@@ -8,7 +9,7 @@ VSIM = vsim
 
 TOPDIR = $(shell pwd)
 TB_TOP = testbench_top
-WORK_DIR = work
+tmp = work
 
 OPTVLOG=+acc
 OPTSIM=-t ps -msgmode wlf -displaymsgmode both
@@ -17,17 +18,17 @@ OPTSIM=-t ps -msgmode wlf -displaymsgmode both
 # Avalon interface sources
 AVALONSRCDIR  = $(TOPDIR)/../avalon_if
 AVALONSRC     = $(AVALONSRCDIR)/avalon_if.sv
-DEP           = $(patsubst $(AVALONSRCDIR)/%.sv,$(WORK_DIR)/.%.compiled,${AVALONSRC})
+DEP           = $(patsubst $(AVALONSRCDIR)/%.sv,tmp/.%.compiled,${AVALONSRC})
 
 # Avalon testbench sources
 AVALONTBSRCDIR  = $(TOPDIR)/avalon_bram_tb_src
 AVALONTBSRC     = verbosity_pkg.sv avalon_mm_pkg.sv avalon_utilities_pkg.sv packet.sv altera_avalon_mm_master_bfm.sv tpt_altera_avalon_mm_monitor_assertion.sv testbench_top.sv
-DEP          += $(patsubst %.sv,$(WORK_DIR)/.%.compiled,${AVALONTBSRC})
+DEP          += $(patsubst %.sv,tmp/.%.compiled,${AVALONTBSRC})
 
 # Module sources
 SRCDIR    = $(TOPDIR)/avalon_bram
 SRC       = $(SRCDIR)/avalon_bram.sv
-DEP      += $(patsubst $(SRCDIR)/%.sv,$(WORK_DIR)/.%.compiled,${SRC})
+DEP      += $(patsubst $(SRCDIR)/%.sv,tmp/.%.compiled,${SRC})
 
 # Auxiliary files for synthesis
 SYNDIR = $(TOPDIR)/avalon_bram_syn_src
@@ -51,42 +52,44 @@ info:
 
 all: simu_batch
 
-exam_packets: $(WORK_DIR)/packets.log
-	less $(WORK_DIR)/packets.log
+compile: tmp/.compiled
+simu_batch: tmp/packets.log
 
-simu_batch: $(WORK_DIR)/packets.log
+tmp/packets.log: tmp/.compiled
+	@cd tmp ; $(VSIM)  $(OPTSIM) -batch -lib work $(TB_TOP) -do "run -all ; quit" 2> packets.log
 
-$(WORK_DIR)/packets.log: compile
-	cd $(WORK_DIR) ; $(VSIM)  $(OPTSIM) -batch -lib work $(TB_TOP) -do "run -all ; quit" 2> packets.log
+exam_packets: tmp/packets.log
+	@less -R tmp/packets.log
 
-simu_gui: compile
-	cd $(WORK_DIR); $(VSIM)  $(OPTSIM)  -lib work $(TB_TOP)
+simu_gui: tmp/.compiled
+	@cd tmp; $(VSIM)  $(OPTSIM)  -lib work $(TB_TOP)
 
-compile: $(DEP)
+tmp/.compiled: $(DEP) | tmp
+	@touch $@
 
-$(WORK_DIR)/.%.compiled: $(AVALONTBSRCDIR)/%.sv | $(WORK_DIR)/work
-	cd $(WORK_DIR) ; $(VLOG)  $(OPTVLOG) $<
-	touch $@
+tmp/.%.compiled: $(AVALONTBSRCDIR)/%.sv | tmp/work
+	@cd tmp ; $(VLOG)  $(OPTVLOG) $<
+	@touch $@
 
-$(WORK_DIR)/.%.compiled: $(AVALONSRCDIR)/%.sv | $(WORK_DIR)/work
-	cd $(WORK_DIR) ; $(VLOG)  $(OPTVLOG) $<
-	touch $@
+tmp/.%.compiled: $(AVALONSRCDIR)/%.sv | tmp/work
+	@cd tmp ; $(VLOG)  $(OPTVLOG) $<
+	@touch $@
 
-$(WORK_DIR)/.%.compiled: $(SRCDIR)/%.sv | $(WORK_DIR)/work
-	cd $(WORK_DIR) ; $(VLOG)  +acc $<
-	touch $@
+tmp/.%.compiled: $(SRCDIR)/%.sv | tmp/work
+	@cd tmp ; $(VLOG)  $(OPTVLOG) $<
+	@touch $@
 
-syn: $(WORK_DIR)/$(AREA_FILE)
+syn: tmp/$(AREA_FILE)
 
-$(WORK_DIR)/$(AREA_FILE): $(AVALONSRC) $(SRC) $(WORK_DIR)
-	cd $(WORK_DIR) && TOP_MODULE=wrapper HDL_FILES="$(AVALONSRC) $(SYNSRC) $(SRC)" make -f ../Makefile_syn pr
+tmp/$(AREA_FILE): $(AVALONSRC) $(SRC) | tmp
+	@cd tmp ; TOP_MODULE=wrapper HDL_FILES="$(AVALONSRC) $(SYNSRC) $(SRC)" make -f ../Makefile_syn pr
 
-$(WORK_DIR):
-	mkdir $(WORK_DIR)
+tmp:
+	@mkdir $@
 
-$(WORK_DIR)/work: $(WORK_DIR)
-	cd $(WORK_DIR) ; vlib work
+tmp/work: | tmp
+	@cd tmp ; vlib work
 
 clean:
-	rm -rf $(WORK_DIR)
+	@rm -rf tmp
 

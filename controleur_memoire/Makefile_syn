@@ -1,6 +1,6 @@
 # @file  Makefile
 # @note  This Makefile is intended to be launched via a master Makefile
-
+SHELL := /bin/bash
 export SYN_DIR = $(shell pwd)
 
 # source files directory
@@ -21,6 +21,9 @@ export HDL_FILES ?= $(patsubst %,$(SRC_DIR)/%,$(SOURCE_FILES))
 # End of SOURCE_FILES
 .PHONY : all syn clean pr show
 
+# For colored messages
+cyan = /bin/echo -e "\n\x1b[36m\#\# $1\x1b[0m"
+
 # Where are the tools ?
 SYN_PR_TOOLS=/comelec/softs/opt/yosys
 YOSYS_PATH=${SYN_PR_TOOLS}/current/bin
@@ -34,20 +37,35 @@ help:
 	@echo "make pr   : launch place and route phase for FPGA target"
 	@echo "make clean: clean the current directory"
 
-# Part 0 : conversion SystemVerilog -> Verilog
-# For correct support of SystemVerilog Interfaces
-# The SYNTHESIS prep variable eliminates testbench
-# specific code
-syn_prep:$(TOP_MODULE).v
-
-$(TOP_MODULE).v: $(HDL_FILES)
-	${SV2V_PATH}/sv2v --define=SYNTHESIS ${HDL_FILES} > ${TOP_MODULE}.v
-
 # Part 1 : Yosys synthesis
 syn:$(TOP_MODULE)_syn.json
 
-$(TOP_MODULE)_syn.json: $(TOP_MODULE).v
-	$(YOSYS_PATH)/yosys -c ../synthesis.tcl -L $(TOP_MODULE)_syn.log
+# Run quietly, print a sumary of the cell used
+$(TOP_MODULE)_syn.json: $(HDL_FILES)
+	@$(call cyan,"Synthesis phase")
+	@$(YOSYS_PATH)/yosys -m slang -q ../synthesis.tcl -L $(TOP_MODULE)_syn.log 
+	@$(call cyan,"Synthesis stats")
+	@awk -f ../stats.awk $(TOP_MODULE)_syn.log
+
+# Part 2 : Place and Route
+# What is the kind of FPGA
+DEVICE?=5CSEMA5F31C6
+# Add definition of positions of dummy I/Os
+QSF?=../avalon_bram_syn_src/$(TOP_MODULE).qsf
+# Target frequency (MHz)
+FREQ?=50
+
+pr:$(TOP_MODULE)_pr.v
+
+$(TOP_MODULE)_pr.v: $(TOP_MODULE)_pr.json
+	@$(YOSYS_PATH)/yosys -q -p "read_json $< ; write_verilog $@" -l $(TOP_MODULE)_conv_pr.log
+
+# Place an route for max frequency evaluation
+$(TOP_MODULE)_pr.json: $(TOP_MODULE)_syn.json $(QSF)
+	@$(call cyan,"Place and route phase")
+	-@$(YOSYS_PATH)/nextpnr-mistral -q --top $(TOP_MODULE) --device $(DEVICE) --freq $(FREQ) --json $< --write $@ --qsf $(QSF) --router router2 --sdf $(TOP_MODULE)_pr.sdf --sdf-cvc --detailed-timing-report --log $(TOP_MODULE)_pr.log
+	@awk '/MHz/ {nb=nb+1; if(nb==2) {print;printf("\n")}}' $(TOP_MODULE)_pr.log
+
 
 # Part 2 :  Creates a svg representation of the design
 show: $(TOP_MODULE)_prep.svg
@@ -56,22 +74,7 @@ show: $(TOP_MODULE)_prep.svg
 $(TOP_MODULE)_prep.svg: $(TOP_MODULE)_syn.json
 	${GRAPH_PATH}/netlistsvg ${TOP_MODULE}_prep.json -o $@
 
-# Part 3 : Place and Route
-# What is the kind of FPGA
-DEVICE?=5CSEMA5F31C6
-# Add definition of positions of dummy I/Os
-QSF?=../avalon_bram_syn_src/$(TOP_MODULE).qsf
-# Target frequency (MHz)
-FREQ?=100
 
-pr:$(TOP_MODULE)_pr.v
-
-$(TOP_MODULE)_pr.json:$(TOP_MODULE)_syn.json $(QSF)
-	$(YOSYS_PATH)/nextpnr-mistral --top $(TOP_MODULE) --device $(DEVICE) --freq $(FREQ) --json $< --write $@ --qsf $(QSF) --router router2 --sdf $(TOP_MODULE)_pr.sdf --sdf-cvc --detailed-timing-report --log $(TOP_MODULE)_pr.log
-
-# Part 4 : Generate post P&R Verilog Netlist
-$(TOP_MODULE)_pr.v: $(TOP_MODULE)_pr.json
-	$(YOSYS_PATH)/yosys -p "read_json $< ; write_verilog $@" -l $(TOP_MODULE)_conv_pr.log
 
 clean:
 	@rm -fr *.svg

@@ -248,7 +248,7 @@ module testbench_top();
             // generate an aligned address ;
                 tmp_addr = master_addr + AV_NUMSYMBOLS*i ;
                 // Read the current content of the memory
-		        avalon_read(tmp_addr, master_rddata); // AVALON READ No needs for masks when reading
+		        avalon_read(tmp_addr, master_rddata,$urandom & 1'b1); // AVALON READ No needs for masks when reading
                 dataOutRef.push_back(master_rddata) ; // store result in a queue.
 		        // $display("HOST: Read (addr, rddata) = (%.8Xh, %.8Xh)", tmp_addr, master_rddata);
             end
@@ -262,7 +262,7 @@ module testbench_top();
                 tmp_addr = master_addr + AV_NUMSYMBOLS*i ;
                 master_wrdata = dataIn[i] ;
                 master_byte_enable = selIn[i] ;
-		        avalon_write(tmp_addr, master_wrdata,master_byte_enable); // AVALON WRITE with mask
+		        avalon_write(tmp_addr, master_wrdata,master_byte_enable,$urandom & 1'b1); // AVALON WRITE with mask
 		        // $display("HOST: Write (addr, data, byte_enable) = (%.8Xh, %.8Xh, %.4bb)", tmp_addr, master_wrdata, master_byte_enable);
             end
 
@@ -274,7 +274,7 @@ module testbench_top();
                 // generate an aligned address ;
                 tmp_addr = master_addr + AV_NUMSYMBOLS*i ;
                 // Read the new content of the memory
-		        avalon_read(tmp_addr, master_rddata); // AVALON READ No needs for masks when reading
+		        avalon_read(tmp_addr, master_rddata,$urandom & 1'b1); // AVALON READ No needs for masks when reading
                 dataOut.push_back(master_rddata) ; // store result in a queue.
 		        // $display("HOST: Read (addr, rddata) = (%.8Xh, %.8Xh)", tmp_addr, master_rddata);
             end
@@ -337,7 +337,7 @@ module testbench_top();
             // 2 Write new contents using the masks
             // generate associated bytes and masks
             pkt.setWriteTime($time);
-		    avalon_write_burst(master_addr, dataIn, selIn, dataIn.size());
+		    avalon_write_burst(master_addr, dataIn, selIn, dataIn.size(),1);
             @(posedge clk) ;
 
             // 3 Read back the current content of the memory at the given location of the packet
@@ -377,7 +377,7 @@ module testbench_top();
                 dataIn.push_back(MAX_BURST_SIZE*itr+w);
                 selIn.push_back(4'b1111) ;
             end
-		    avalon_write_burst(master_addr, dataIn, selIn, dataIn.size());
+		    avalon_write_burst(master_addr, dataIn, selIn, dataIn.size(),0);
         end
         // Read back the content of the memory and check the contents
         for(int itr=0;itr < RAMSIZE/MAX_BURST_SIZE;itr++) begin
@@ -395,8 +395,8 @@ module testbench_top();
         end
         // Test if memory is oversized
         $display("%t: INFO:  Value 32'h12345678 written at first address above RAM last address, read back at address 0:",$time) ;
-         avalon_write(4*RAMSIZE, 32'h12345678,4'b1111);
-         avalon_read(0, master_rddata);
+         avalon_write(4*RAMSIZE, 32'h12345678,4'b1111,0);
+         avalon_read(0, master_rddata,0);
          if (!(master_rddata === 32'h12345678)) begin
                     $timeformat(-9,3,"ns",20);
                     $display("%t: FAILURE: Possible incorrect memory size",$time) ;
@@ -430,13 +430,14 @@ module testbench_top();
 	// ------------------------------------------------------------
 		input [AV_ADDRESS_W-1:0] addr,
 		input [AV_DATA_W-1:0]    data,
-        input [AV_NUMSYMBOLS-1:0] byte_enable
+        input [AV_NUMSYMBOLS-1:0] byte_enable,
+        input int init_latency
 	);
 	begin
 		// Construct the BFM request
 		`HOST.set_command_request(REQ_WRITE);
 		`HOST.set_command_idle(0, 0);
-		`HOST.set_command_init_latency(0);
+		`HOST.set_command_init_latency(init_latency);
 		`HOST.set_command_address(addr);
 		`HOST.set_command_byte_enable(byte_enable,0);
 		`HOST.set_command_burst_size(1);
@@ -459,13 +460,14 @@ module testbench_top();
 	task avalon_read (
 	// ------------------------------------------------------------
 		input  [AV_ADDRESS_W-1:0] addr,
-		output [AV_DATA_W-1:0]    data
+		output [AV_DATA_W-1:0]    data,
+        input int init_latency
 	);
 	begin
 		// Construct the BFM request
 		`HOST.set_command_request(REQ_READ);
 		`HOST.set_command_idle(0, 0);
-		`HOST.set_command_init_latency(0);
+		`HOST.set_command_init_latency(init_latency);
 		`HOST.set_command_address(addr);
 		`HOST.set_command_byte_enable('1,0);
 		`HOST.set_command_burst_size(1);
@@ -495,13 +497,19 @@ module testbench_top();
 		input [AV_ADDRESS_W-1:0] addr,
 		input [AV_DATA_W-1:0]    data [$],
         input [AV_NUMSYMBOLS-1:0] byte_enable [$],
-        input int burst_size
+        input int burst_size,
+        input bit randb
 	);
 	begin
 		// Construct the BFM request
 		`HOST.set_command_request(REQ_WRITE);
-		`HOST.set_command_idle(0, 0);
 		`HOST.set_command_init_latency(0);
+            for(int i=0;i < burst_size; i++) begin
+            if(randb) 
+		     `HOST.set_command_idle($urandom & 1'b1,i);
+            else
+		     `HOST.set_command_idle(0,i);
+            end
 		`HOST.set_command_address(addr);
 		`HOST.set_command_burst_size(burst_size);
 		`HOST.set_command_burst_count(burst_size);

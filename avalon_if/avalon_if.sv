@@ -66,8 +66,6 @@ interface avalon_if #(parameter DATA_BYTES=4, BURSTCOUNT_W=6) (input logic clk, 
     input  readdatavalid
   );
   //////////////// End of RTL Masters and agents modports ////////////
-  //////////////// End of RTL Masters and agents modports ////////////
-
 
 endinterface
 
