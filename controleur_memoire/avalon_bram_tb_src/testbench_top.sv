@@ -365,7 +365,7 @@ module testbench_top();
 
         $timeformat(-9,3,"ns",20);
         $display("%t: INFO:  Starting RAM config tests",$time);
-        $display("%t: INFO:  %0d words written in the RAM with increasing adresses and values (sel = 1111):",$time,RAMSIZE) ;
+        $display("%t: INFO:  %0d words written in the RAM with increasing adresses and values (sel = 1111)",$time,RAMSIZE) ;
 
         // Write enough bursts of MAX_BURST_SIZE to fill the memory
         // Warnong RAMSIZE should be a multiple of MAX_BURST_SIZE...
@@ -394,7 +394,7 @@ module testbench_top();
             end
         end
         // Test if memory is oversized
-        $display("%t: INFO:  Value 32'h12345678 written at first address above RAM last address, read back at address 0:",$time) ;
+        $display("%t: INFO:  Value 32'h12345678 written at first address above RAM last address and read back at address 0",$time) ;
          avalon_write(4*RAMSIZE, 32'h12345678,4'b1111,0);
          avalon_read(0, master_rddata,0);
          if (!(master_rddata === 32'h12345678)) begin
@@ -404,7 +404,7 @@ module testbench_top();
                     $error(1) ;
          end
         $timeformat(-9,3,"ns",20);
-        $display("%t: INFO:  Finished tests of RAM size",$time);
+        $display("%t: INFO:  Finished tests of RAM size without errors.",$time);
 		$finish;
 	end
 
@@ -412,7 +412,7 @@ module testbench_top();
     // General timeoutwatchdog
 	// ============================================================
     initial begin
-        #(500us) ;
+        #(130us) ;
         $timeformat(-9,5,"ns",20);
 	    $display("%t: %s %s",$time, "FAILURE:", "Simulation didn't finish before the expected time, probable stalled process waiting for something...");
         $error(1);

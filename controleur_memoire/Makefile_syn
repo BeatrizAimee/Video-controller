@@ -63,7 +63,7 @@ $(TOP_MODULE)_pr.v: $(TOP_MODULE)_pr.json
 # Place an route for max frequency evaluation
 $(TOP_MODULE)_pr.json: $(TOP_MODULE)_syn.json $(QSF)
 	@$(call cyan,"Place and route phase")
-	-@$(YOSYS_PATH)/nextpnr-mistral -q --top $(TOP_MODULE) --device $(DEVICE) --freq $(FREQ) --json $< --write $@ --qsf $(QSF) --router router2 --sdf $(TOP_MODULE)_pr.sdf --sdf-cvc --detailed-timing-report --log $(TOP_MODULE)_pr.log
+	-@$(YOSYS_PATH)/nextpnr-mistral -q --top $(TOP_MODULE) --device $(DEVICE) --freq $(FREQ) --json $< --write $@ --qsf $(QSF) --router router2 --sdf $(TOP_MODULE)_pr.sdf --sdf-cvc --report rep.json --detailed-timing-report --log $(TOP_MODULE)_pr.log
 	@awk '/MHz/ {nb=nb+1; if(nb==2) {print;printf("\n")}}' $(TOP_MODULE)_pr.log
 
 

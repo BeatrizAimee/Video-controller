@@ -1,6 +1,6 @@
 #
 SHELL := /bin/bash
-.PHONY: clean all simu_batch compile simu_gui info syn
+.PHONY: clean simu_batch compile simu_gui info syn
 
 export PATH:=/comelec/softs/bin:$(PATH)
 
@@ -38,17 +38,16 @@ SYNSRC = $(wildcard $(SYNDIR)/*.sv)
 AREA_FILE   = avalon_bram_area.log
 TIMING_FILE   = avalon_bram_timing.log
 
-
 info:
 	@echo "Les commandes possibles sont:"
 	@echo "make compile       : compilation des codes (module à tester et testbenchs)"
 	@echo "make simu_batch    : simulation en mode terminal, avec simple affichage des résultats des tests"
 	@echo "make exam_packets  : examen détaillé des éventuelles erreurs de lectures et d'écriture"
 	@echo "make simu_gui      : simulation en mode graphique pour faire un debug de votre code."
-	@echo "make all           : équivalent à simu_gui"
 	@echo "make syn           : test de synthèse de votre module avalon_bram"
 	@echo "make info          : ce message"
 	@echo "make clean         : nettoyage des fichiers inutiles"
+	@echo "make all           : équivalent à simu_batch"
 
 all: simu_batch
 
