@@ -64,7 +64,7 @@ module testbench_top();
 	// ------------------------------------------------------------
 	//
 	initial
-		clk = 1'b0;
+		clk = 1'b1;
 	always
 		#(CLK_PERIOD/2) clk <= ~clk;
 
@@ -75,6 +75,7 @@ module testbench_top();
 	initial begin
         reset = 1'b1 ;
         repeat(8) @(posedge clk) ;
+        #1ns;
         reset = 1'b0 ;
     end
 
