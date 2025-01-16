@@ -84,7 +84,7 @@ tmp/$(AREA_FILE): $(AVALONSRC) $(SRC) | tmp
 	@cd tmp ; TOP_MODULE=wrapper HDL_FILES="$(AVALONSRC) $(SYNSRC) $(SRC)" make -f ../Makefile_syn pr
 
 tmp:
-	@mkdir $@
+	@mkdir -p $@
 
 tmp/work: | tmp
 	@cd tmp ; vlib work
