@@ -83,6 +83,9 @@ syn: tmp/$(AREA_FILE)
 tmp/$(AREA_FILE): $(AVALONSRC) $(SRC) | tmp
 	@cd tmp ; TOP_MODULE=wrapper HDL_FILES="$(AVALONSRC) $(SYNSRC) $(SRC)" make -f ../synthesis.mk pr
 
+view_pr: syn
+	@make -C tmp -f ../synthesis.mk view_pr_wrapper
+
 tmp:
 	@mkdir -p $@
 

@@ -65,13 +65,15 @@ $(TOP_MODULE)_pr.json: $(TOP_MODULE)_syn.json $(QSF)
 
 
 # Part 2 :  Creates a svg representation of the design
-show: $(TOP_MODULE)_syn.svg
+show: show_$(TOP_MODULE)
+show_%: %_syn.svg
 	inkview $<
 
 %.svg: %.json
 	netlistsvg $< -o $@
 
-
+view_pr_%: %_pr.json
+	@nextpnr-ice40 --gui --$(DEVICE) --package $(PACKAGE) --json $<
 
 clean:
 	@rm -fr *.svg
