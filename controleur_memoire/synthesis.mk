@@ -59,7 +59,7 @@ $(TOP_MODULE)_pr.v: $(TOP_MODULE)_pr.json
 # Place an route for max frequency evaluation
 $(TOP_MODULE)_pr.json: $(TOP_MODULE)_syn.json $(QSF)
 	@$(call cyan,"Place and route phase")
-	nextpnr-ice40 --quiet  --top $(TOP_MODULE) --$(DEVICE) --package $(PACKAGE) --freq $(FREQ) --json $< --write $@\
+	@nextpnr-ice40 --quiet  --top $(TOP_MODULE) --$(DEVICE) --package $(PACKAGE) --freq $(FREQ) --json $< --write $@\
 		--pcf $(PIN_DEF) --sdf $(TOP_MODULE)_pr.sdf --sdf-cvc --detailed-timing-report --log $(TOP_MODULE)_pr.log
 	@echo "============="; awk '/MHz/ {nb=nb+1; if(nb==2) {print;printf("\n")}}' $(TOP_MODULE)_pr.log; echo "============="
 
