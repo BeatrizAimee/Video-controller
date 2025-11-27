@@ -2,6 +2,7 @@
 # @note  This Makefile is intended to be launched via a master Makefile
 SHELL := /bin/bash
 export SYN_DIR = $(shell pwd)
+export PATH := /comelec/softs/bin:${PATH}
 
 # source files directory
 SRC_DIR ?= $(SYN_DIR)/../src
@@ -24,12 +25,6 @@ export HDL_FILES ?= $(patsubst %,$(SRC_DIR)/%,$(SOURCE_FILES))
 # For colored messages
 cyan = /bin/echo -e "\n\x1b[36m\#\# $1\x1b[0m"
 
-# Where are the tools ?
-SYN_PR_TOOLS=/comelec/softs/opt/yosys
-YOSYS_PATH=${SYN_PR_TOOLS}/current/bin
-GRAPH_PATH=${SYN_PR_TOOLS}/netlistsvg
-SV2V_PATH=${SYN_PR_TOOLS}/current/bin
-
 # The list of phony targets
 help:
 	@echo "make syn  : launch synthesis"
@@ -41,38 +36,40 @@ help:
 syn:$(TOP_MODULE)_syn.json
 
 # Run quietly, print a sumary of the cell used
-$(TOP_MODULE)_syn.json: $(HDL_FILES)
+$(TOP_MODULE)_prep.json $(TOP_MODULE)_syn.json: $(HDL_FILES)
 	@$(call cyan,"Synthesis phase")
-	@$(YOSYS_PATH)/yosys -m slang -q ../synthesis.tcl -L $(TOP_MODULE)_syn.log 
+	@yosys -m slang -q ../synthesis.tcl -L $(TOP_MODULE)_syn.log
 	@$(call cyan,"Synthesis stats")
 	@awk -f ../stats.awk $(TOP_MODULE)_syn.log
 
 # Part 2 : Place and Route
 # What is the kind of FPGA
-DEVICE?=5CSEMA5F31C6
+DEVICE = hx8k
+PACKAGE = ct256
 # Add definition of positions of dummy I/Os
-QSF?=../avalon_bram_syn_src/$(TOP_MODULE).qsf
+PIN_DEF = ../avalon_bram_syn_src/$(TOP_MODULE).pcf
 # Target frequency (MHz)
 FREQ?=50
 
 pr:$(TOP_MODULE)_pr.v
 
 $(TOP_MODULE)_pr.v: $(TOP_MODULE)_pr.json
-	@$(YOSYS_PATH)/yosys -q -p "read_json $< ; write_verilog $@" -l $(TOP_MODULE)_conv_pr.log
+	@yosys -q -p "read_json $< ; rename top $(TOP_MODULE); write_verilog $@" -l $(TOP_MODULE)_conv_pr.log
 
 # Place an route for max frequency evaluation
 $(TOP_MODULE)_pr.json: $(TOP_MODULE)_syn.json $(QSF)
 	@$(call cyan,"Place and route phase")
-	-@$(YOSYS_PATH)/nextpnr-mistral -q --top $(TOP_MODULE) --device $(DEVICE) --freq $(FREQ) --json $< --write $@ --qsf $(QSF) --router router2 --sdf $(TOP_MODULE)_pr.sdf --sdf-cvc --report rep.json --detailed-timing-report --log $(TOP_MODULE)_pr.log
-	@awk '/MHz/ {nb=nb+1; if(nb==2) {print;printf("\n")}}' $(TOP_MODULE)_pr.log
+	nextpnr-ice40 --quiet  --top $(TOP_MODULE) --$(DEVICE) --package $(PACKAGE) --freq $(FREQ) --json $< --write $@\
+		--pcf $(PIN_DEF) --sdf $(TOP_MODULE)_pr.sdf --sdf-cvc --detailed-timing-report --log $(TOP_MODULE)_pr.log
+	@echo "============="; awk '/MHz/ {nb=nb+1; if(nb==2) {print;printf("\n")}}' $(TOP_MODULE)_pr.log; echo "============="
 
 
 # Part 2 :  Creates a svg representation of the design
-show: $(TOP_MODULE)_prep.svg
-	chromium $<
+show: $(TOP_MODULE)_syn.svg
+	inkview $<
 
-$(TOP_MODULE)_prep.svg: $(TOP_MODULE)_syn.json
-	${GRAPH_PATH}/netlistsvg ${TOP_MODULE}_prep.json -o $@
+%.svg: %.json
+	netlistsvg $< -o $@
 
 
 

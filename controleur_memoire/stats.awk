@@ -1,17 +1,21 @@
 BEGIN {
-        # 110 registres du wrapper à enlever 
+        # 110 registres du wrapper à enlever
         REG_OFFSET=110
     }
 
-/5\.56/ {OK=1;MISTRAL["ALUT"]=0;MISTRAL["ALUT_ARITH"]=0;MISTRAL["FF"]=0;MISTRAL["M10K"]=0;MISTRAL["MLAB"]=0}
-/5\.57/ {OK=0}
-/MISTRAL_ALUT_ARITH/ {if(OK) {MISTRAL["ALUT_ARITH"]=$2;NEXT}}
-/MISTRAL_ALUT/ {if(OK) {MISTRAL["ALUT"]=MISTRAL["ALUT"]+$2}}
-/MISTRAL_FF/ {if(OK) {MISTRAL["FF"]=$2-REG_OFFSET}}
-/MISTRAL_M10K/ {if(OK) {MISTRAL["M10K"]=$2}}
-/MISTRAL_MLAB/ {if(OK) {MISTRAL["MLAB"]=$2}}
+/5\.48/ {OK=1;RESOURCES["LUT"]=0;RESOURCES["CARRY"]=0;RESOURCES["FF"]=0;RESOURCES["RAM40"]=0}
+/^===\sdesign\shierarchy\s===/ {OK=0}
+/SB_CARRY/ {if(OK) {RESOURCES["CARRY"]=$1;NEXT}}
+/SB_LUT.*/ {if(OK) {RESOURCES["LUT"]+=$1}}
+/SB_DFF.*/ {if(OK) {RESOURCES["FF"]+=$1}}
+/SB_RAM40_4K/ {if(OK) {RESOURCES["RAM40"]=$1}}
 END {
-    for (key in MISTRAL) {
-        printf("MISTRAL_%-10s%8d\n",key,MISTRAL[key])
+    RESOURCES["FF"] -= REG_OFFSET
+    print "============================="
+    print " + iCE40 Ressources:"
+    print "============================="
+    for (key in RESOURCES) {
+        printf("SB%-10s%8d\n",key,RESOURCES[key])
     }
+    print "============================="
 }

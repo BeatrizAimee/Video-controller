@@ -81,7 +81,7 @@ tmp/.%.compiled: $(SRCDIR)/%.sv | tmp/work
 syn: tmp/$(AREA_FILE)
 
 tmp/$(AREA_FILE): $(AVALONSRC) $(SRC) | tmp
-	@cd tmp ; TOP_MODULE=wrapper HDL_FILES="$(AVALONSRC) $(SYNSRC) $(SRC)" make -f ../Makefile_syn pr
+	@cd tmp ; TOP_MODULE=wrapper HDL_FILES="$(AVALONSRC) $(SYNSRC) $(SRC)" make -f ../synthesis.mk pr
 
 tmp:
 	@mkdir -p $@
