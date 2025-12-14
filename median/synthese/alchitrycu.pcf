@@ -1,0 +1,28 @@
+# io_dip 0->7
+
+set_io DI[0] G12
+set_io DI[1] F12
+set_io DI[2] F11
+set_io DI[3] E11
+set_io DI[4] D12
+set_io DI[5] D11
+set_io DI[6] C12
+set_io DI[7] C11
+
+# io_led 0->7
+set_io DO[0] G14
+set_io DO[1] F14
+set_io DO[2] E12
+set_io DO[3] E14
+set_io DO[4] D14
+set_io DO[5] C14
+set_io DO[6] B14
+set_io DO[7] A12
+
+# io_button 0
+set_io DSI  G11
+# led 0
+set_io DSO  J11
+
+set_io CLK  P7
+set_io nRST P8
