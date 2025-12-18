@@ -1,7 +1,9 @@
 # Squelette de Makefile pour le projet Video
 SHELL=/bin/bash
-AVALON_BFMS := /comelec/softs/opt/altera/current/ip/altera/sopc_builder_ip/verification
-export PATH:=/comelec/softs/bin:$(PATH)
+ALTERA_PATH ?= /comelec/softs/opt/altera
+BIN_PATH    ?= /comelec/softs/bin
+AVALON_BFMS := $(ALTERA_PATH)/current/ip/altera/sopc_builder_ip/verification
+export PATH := $(BIN_PATH):$(PATH)
 
 .PHONY: clean all simu_batch compile simu_gui info
 
