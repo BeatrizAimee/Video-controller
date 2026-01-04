@@ -1,20 +1,39 @@
-//-----------------------------------------------------------------
-// Avalon BlockRAM
-//-----------------------------------------------------------------
-//
-// Le paramètre RAM_ADD_W permet de déterminer le nombre de mots de
-// la mémoire RAM interne au module (2**RAM_ADD_W)
-// Le paramètre BURSTCOUNT_W permet de déterminer la taille maximale
-// du "burst" en mode BURST (2**(BURST_COUNT_W-1))
-// (voir doc mnl_avalon_spec.pdf, page 17)
 `timescale 1ns/1ps
 `default_nettype none
-module avalon_bram #(parameter RAM_ADD_W = 8, BURSTCOUNT_W = 4 ) (
-      // Avalon  interface for an agent
-      avalon_if.agent avalon_a
-      );
-      // a vous de jouer a partir d'ici
 
+module avalon_bram #(parameter RAM_ADD_W = 8, BURSTCOUNT_W = 4 ) (
+      avalon_if.agent avalon_a
+);
+
+    // Declarations
+    logic [7:0] memory_bank [2**RAM_ADD_W][4];
+
+    logic [RAM_ADD_W-1:0] word;
+    assign word = avalon_a.address[RAM_ADD_W+1 : 2];
+
+    // Signal Control 
+    always_ff @(posedge avalon_a.clk) begin
+        avalon_a.waitrequest   <= avalon_a.reset ? 1'b1 : avalon_a.read;
+        avalon_a.readdatavalid <= avalon_a.reset ? 1'b0 : avalon_a.read;
+    end
+
+    // Memory access
+    always_ff @(posedge avalon_a.clk) begin
+        // WRITE
+        if (avalon_a.write) begin
+            if (avalon_a.byteenable[3]) memory_bank[word][3] <= avalon_a.writedata[31:24];
+            if (avalon_a.byteenable[2]) memory_bank[word][2] <= avalon_a.writedata[23:16];
+            if (avalon_a.byteenable[1]) memory_bank[word][1] <= avalon_a.writedata[15: 8];
+            if (avalon_a.byteenable[0]) memory_bank[word][0] <= avalon_a.writedata[ 7: 0];
+        end else begin
+        // READ
+            avalon_a.readdata = {
+                  memory_bank[word][3],
+                  memory_bank[word][2],
+                  memory_bank[word][1],
+                  memory_bank[word][0]
+            };
+        end
+    end
 
 endmodule
-
