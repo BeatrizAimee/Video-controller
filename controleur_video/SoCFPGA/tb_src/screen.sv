@@ -112,7 +112,7 @@ fork
 		if (in_vdisp) row_count++;
 	end
 	forever begin 
-		@(posedge video_ifs.CLK);
+		@(negedge video_ifs.CLK);
 		if(in_vdisp && video_ifs.BLANK) begin
            //dump.modify(video_ifs.VGA_R,video_ifs.VGA_G,video_ifs.VGA_B,column_count,row_count);
 			dump.modify(video_ifs.RGB[23:16],video_ifs.RGB[15:8],video_ifs.RGB[7:0],column_count,row_count);
