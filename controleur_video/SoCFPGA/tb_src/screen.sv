@@ -195,7 +195,7 @@ property vbp;
 endproperty
 
 sequence s_vdisp;
-	$rose(video_ifs.BLANK)[->VDISP];
+	$fell(video_ifs.BLANK)[->VDISP];
 endsequence
 
 property vdisp;
