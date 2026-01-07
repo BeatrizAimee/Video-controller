@@ -172,8 +172,11 @@ property vp;
 	// but function calls are ok. in_vp=1, not_ok, f_in_vp(1) ok. why ?
 endproperty
 
+sequence s_hbp;
+	##HBP $rose(video_ifs.BLANK);
+endsequence
 sequence s_vbp;
-	$rose(video_ifs.VS) ##0 ($rose(video_ifs.HS)[->VBP]) ##0 ($rose(video_ifs.BLANK)[->1],f_in_vbp(0));
+	($rose(video_ifs.VS)) ##0 ($rose(video_ifs.HS)[->VBP+1]) ##0 (s_hbp,f_in_vbp(0));
 endsequence
 
 sequence s_vbp_1;
