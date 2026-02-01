@@ -1,13 +1,14 @@
 `default_nettype none
 
-module Top (
+module Top #(parameter HDISP = 800, parameter VDISP = 480)(
     // Les signaux externes de la partie FPGA
 	input  wire  FPGA_CLK1_50,
 	input  wire  [1:0]	KEY, 
 	output logic [7:0]	LED,
 	input  wire	 [3:0]	SW,
     // Les signaux du support matériel son regroupés dans une interface
-    hws_if.master       hws_ifm
+    hws_if.master       hws_ifm,
+    video_if.master     video_ifm
 );
 
 //====================================
@@ -140,6 +141,13 @@ always_ff @(posedge pixel_clk) begin
         end
     end
 end
+
+//VGA block instantiation
+vga #(.HDISP(HDISP), .VDISP(VDISP)) vga0(
+    .pixel_clk (pixel_clk),
+    .pixel_rst (pixel_rst),
+    .video_ifm (video_ifm)
+);
 
 endmodule
 `default_nettype wire
