@@ -1,7 +1,8 @@
 module vga #(parameter HDISP = 800, parameter VDISP = 480)(
     input  logic        pixel_clk,
     input  logic        pixel_rst,
-    video_if.master     video_ifm
+    video_if.master     video_ifm,
+    avalon_if.host  avalon_ifh
 );
 
 // VGA SIGNAL PARAMETERS
@@ -73,26 +74,108 @@ always_ff @(posedge pixel_clk) begin
     end
 end
 
-// TEST PATTERN GENERATION
-logic [HCOUNT_WIDTH-1:0] x_count;
-logic [VCOUNT_WIDTH-1:0] y_count;
+// FIFO AND AVALON PARAMETERS
+localparam BURSTSIZE = 16;
+localparam LAST_ADDR = (HDISP * VDISP * 4) - 4; // byte address
+localparam ALMOST_FULL_THRESHOLD = (1 << 8) - BURSTSIZE - 1; // Shift 8 bits to get 256 depth, then minus burst size and 1 (last before full)
 
-assign x_count = h_count - HACTIVE_START;
-assign y_count = v_count - VACTIVE_START;
+// FIFO SIGNALS
+logic [23:0] fifo_rdata;
+logic        fifo_empty;
+logic        walmost_full;
+wire         fifo_read;
 
-always_ff @(posedge pixel_clk) begin
-    if (pixel_rst) begin
-        video_ifm.RGB <= 24'h000000; // Black on reset
+// FIFO INSTANTIATION
+async_fifo #(.DATA_WIDTH(24), .DEPTH_WIDTH(8), .ALMOST_FULL_THRESHOLD(ALMOST_FULL_THRESHOLD)) fifo0 (
+    .rst          (avalon_ifh.reset),
+    .rclk         (pixel_clk),
+    .read         (fifo_read),
+    .rdata        (fifo_rdata),
+    .rempty       (fifo_empty),
+    .wclk         (avalon_ifh.clk),
+    .wdata        (avalon_ifh.readdata[23:0]),
+    .write        (avalon_ifh.readdatavalid),
+    .wfull        (),
+    .walmost_full (walmost_full)
+);
+
+// AVALON LOGIC
+assign avalon_ifh.byteenable = 4'b1111; // Always read all bytes
+assign avalon_ifh.burstcount = BURSTSIZE; 
+assign avalon_ifh.write      = 1'b0;
+
+// FSM STATES
+typedef enum logic [1:0] {
+    IDLE    = 2'd0, // Initial state
+    REQUEST = 2'd1, // Requesting data
+    READ    = 2'd2, // Reading data
+    WAIT    = 2'd3  // Waiting for next burst
+} state_t;
+
+state_t state;
+
+logic [4:0] burst_count; // Remaining transfers in the burst
+
+assign avalon_ifh.read = (state == REQUEST) && (walmost_full == 1'b0); // Only request when FIFO can accept more
+
+// AVALON FSM
+always_ff @(posedge avalon_ifh.clk) begin
+    if (avalon_ifh.reset) begin
+        state      <= IDLE;
     end else begin
-        if (is_inside_active_x && is_inside_active_y) begin // If inside active area
-            if ((x_count[3:0] == 4'h0) || (y_count[3:0] == 4'h0)) // Every 16 pixels/lines
-                video_ifm.RGB <= 24'hFFFFFF; // White
-            else
-                video_ifm.RGB <= 24'h000000; // Black
-        end else begin
-            video_ifm.RGB <= 24'h000000; // Black outside active area
-        end
+        case (state)
+            IDLE: begin
+                avalon_ifh.address <= '0;
+                burst_count        <= BURSTSIZE;
+                state              <= WAIT;
+            end
+
+            REQUEST: begin // Sends a burst read request
+                if (!avalon_ifh.waitrequest && !walmost_full) // We only proceed if not waiting and FIFO can accept more data
+                    state <= READ;
+            end
+
+            READ: begin
+                if (avalon_ifh.readdatavalid) begin
+                    burst_count <= burst_count - 1'b1;
+
+                    if (avalon_ifh.address == LAST_ADDR)
+                        avalon_ifh.address <= '0;
+                    else
+                        avalon_ifh.address <= avalon_ifh.address + 4;
+
+                    if (burst_count == 5'd1) // If this was the last data in the burst
+                        state <= WAIT;
+                end
+            end
+
+            WAIT: begin
+                burst_count <= BURSTSIZE;
+                if (walmost_full == 1'b0) // When there is space in FIFO, go to request new burst
+                    state <= REQUEST;
+            end
+
+            default: begin
+                state <= IDLE;
+            end
+        endcase
     end
 end
 
+
+// FIFO OUTPUT
+logic enable_read;
+
+always_ff @(posedge pixel_clk) begin
+    if (pixel_rst)
+        enable_read <= 1'b0;
+    else if (walmost_full && (v_count < VACTIVE_START)) // Enable read when FIFO is almost full and we are before active video (means our framebuffer is ready)
+        enable_read <= 1'b1;
+end
+
+assign fifo_read = enable_read && video_ifm.BLANK ? 1'b1 : 1'b0; // Read from FIFO only when its ready and in active video
+assign video_ifm.RGB = fifo_read ? fifo_rdata : 24'h000000; // Connects FIFO data to video output, black otherwise
+
 endmodule
+
+`default_nettype wire
