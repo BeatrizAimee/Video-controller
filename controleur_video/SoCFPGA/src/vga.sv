@@ -75,7 +75,7 @@ always_ff @(posedge pixel_clk) begin
 end
 
 // FIFO AND AVALON PARAMETERS
-localparam BURSTSIZE = 16;
+localparam BURSTSIZE = 32; // double burstsize so frames work right on FPGA screen
 localparam LAST_ADDR = (HDISP * VDISP * 4) - 4; // byte address
 localparam ALMOST_FULL_THRESHOLD = (1 << 8) - BURSTSIZE - 1; // Shift 8 bits to get 256 depth, then minus burst size and 1 (last before full)
 
