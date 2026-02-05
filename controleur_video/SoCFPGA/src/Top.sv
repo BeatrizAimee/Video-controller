@@ -34,6 +34,7 @@ sys_pll  sys_pll_inst(
 //=============================
 avalon_if #( .DATA_BYTES(4)) avalon_if_sdram  (sys_clk, sys_rst);
 avalon_if #( .DATA_BYTES(4)) avalon_if_stream (sys_clk, sys_rst);
+avalon_if #( .DATA_BYTES(4)) avalon_if_vga    (sys_clk, sys_rst);
 
 
 //=============================
@@ -53,8 +54,8 @@ hw_support hw_support_inst (
 // du flux video pour l'instant
 // A SUPPRIMER PLUS TARD
 //=============================
-assign avalon_if_stream.waitrequest = 1'b1;
-assign avalon_if_stream.readdata = '0 ;
+// assign avalon_if_stream.waitrequest = 1'b1;
+// assign avalon_if_stream.readdata = '0 ;
 
 
 //=============================
@@ -147,7 +148,13 @@ vga #(.HDISP(HDISP), .VDISP(VDISP)) vga0(
     .pixel_clk (pixel_clk),
     .pixel_rst (pixel_rst),
     .video_ifm (video_ifm),
-    .avalon_ifh(avalon_if_sdram)
+    .avalon_ifh(avalon_if_vga)
+);
+
+avalon_intercon intercon0 (
+    .avalon_ifa_stream (avalon_if_stream),
+    .avalon_ifa_vga    (avalon_if_vga),
+    .avalon_ifh_sdram  (avalon_if_sdram)
 );
 
 endmodule
