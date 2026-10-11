@@ -1,93 +1,143 @@
-# Beatriz Aimée Teixeira Furtado Braga
+# FPGA Video Controller
 
+A SystemVerilog RTL design for displaying a framebuffer from SDRAM on an FPGA-driven
+LCD/VGA-style video interface.
 
+The main design targets an 800 × 480 RGB output. A video-stream host writes 32-bit pixels
+to SDRAM through Avalon-MM, while the display engine fetches the same framebuffer in bursts,
+crosses into the pixel-clock domain through an asynchronous FIFO, and generates the timing
+and RGB signals for the display.
 
-## Getting started
+## Architecture
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
+```mermaid
+flowchart LR
+    Stream["Video-stream host"] -->|"Avalon-MM writes"| Arbiter
+    Arbiter --> SDRAM["SDRAM framebuffer"]
+    SDRAM -->|"Avalon-MM burst reads"| Arbiter
+    Arbiter --> VGA["VGA controller"]
+    VGA --> FIFO["Asynchronous FIFO"]
+    FIFO --> Display["RGB display interface"]
 ```
-cd existing_repo
-git remote add origin https://gitlab.telecom-paris.fr/4se04/2526/beatriz-aimee-teixeira-furtado-braga.git
-git branch -M main
-git push -uf origin main
+
+The top-level design contains two clock domains:
+
+- **System domain — 100 MHz:** SDRAM access, Avalon-MM transactions and arbitration.
+- **Pixel domain — 32 MHz:** video timing, FIFO consumption and RGB output.
+
+A two-flip-flop reset synchronizer produces a reset local to the pixel domain, avoiding an
+unsafe reset release across the two clock domains.
+
+## Main video path
+
+### Video timing generator
+
+`controleur_video/SoCFPGA/src/vga.sv` implements the raster generator.
+
+- Active resolution: **800 × 480**
+- Pixel format: **24-bit RGB** at the display output
+- Horizontal timing: 40-pixel front porch, 48-pixel sync pulse and 40-pixel back porch
+- Vertical timing: 13-line front porch, 3-line sync pulse and 29-line back porch
+- Active-low horizontal and vertical synchronization signals
+- RGB output is black outside the active display area
+
+The module tracks horizontal and vertical pixel positions, drives `HS`, `VS` and
+`BLANK`, and only consumes a pixel from the FIFO during active video.
+
+### Framebuffer reader
+
+The VGA block reads the framebuffer through a 32-bit Avalon-MM host interface.
+
+- Each read request uses a burst of **32 words**.
+- The byte address wraps after one full `800 × 480 × 4`-byte framebuffer.
+- Returned words enter a **24-bit asynchronous FIFO** with a depth of 256 entries.
+- Pixel output starts after the FIFO has been filled before the active display window,
+  reducing the risk of underflow during a frame.
+
+### Avalon-MM arbitration
+
+`controleur_video/SoCFPGA/src/avalon_intercon.sv` arbitrates SDRAM access between:
+
+1. the incoming stream that writes framebuffer data; and
+2. the VGA engine that reads it back for display.
+
+The arbiter keeps ownership through an active burst, then hands the bus to the other requester
+when the current transfer is complete. It forwards address, byte-enable, read/write data and
+burst-count signals to SDRAM, and routes the corresponding response signals back to the
+selected requester.
+
+## Verification and implementation flow
+
+The simulation environment instantiates a reduced **160 × 90** display configuration to make
+simulation practical. It includes timing assertions for active video, blanking intervals and
+horizontal/vertical synchronization, and can dump rendered frames as PPM images.
+
+The repository also includes a synthesis flow for the target FPGA board, including Qsys/IP
+generation, timing constraints, pin assignments and programming commands.
+
+### Simulation
+
+The included Makefile expects QuestaSim/ModelSim-compatible `vlog` and `vsim` commands,
+plus the required Avalon verification libraries.
+
+```bash
+cd controleur_video/SoCFPGA/sim
+make compile
+make simu_batch
 ```
 
-## Integrate with your tools
+For waveform-based debugging:
 
-- [ ] [Set up project integrations](https://gitlab.telecom-paris.fr/4se04/2526/beatriz-aimee-teixeira-furtado-braga/-/settings/integrations)
+```bash
+make simu_gui
+```
 
-## Collaborate with your team
+### Synthesis and programming
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+The synthesis flow uses Intel Quartus tools.
 
-## Test and Deploy
+```bash
+cd controleur_video/SoCFPGA/syn
+make test_syn
+make syn
+make program
+```
 
-Use the built-in continuous integration in GitLab.
+`make test_syn` performs analysis and elaboration; `make syn` runs the full compilation;
+and `make program` programs the generated bitstream through JTAG.
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+## Additional RTL blocks
 
-***
+Besides the video controller, this repository preserves related reusable designs:
 
-# Editing this README
+- `controleur_memoire/` — an Avalon-MM block RAM controller with byte enables and
+  burst read/write handling.
+- `median/` — a parameterized median-filter controller. The default configuration
+  operates on a 9-sample window.
+- `avalon_if/` — a SystemVerilog Avalon-MM interface definition with host, agent and
+  monitor modports.
+- `ExoSim/` — simulation material for an event-driven hardware model.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Repository layout
 
-## Suggestions for a good README
+```text
+controleur_video/
+├── SoCFPGA/
+│   ├── src/       # Top-level design, VGA engine and SDRAM arbiter
+│   ├── tb_src/    # Testbench, timing checks and example framebuffer
+│   ├── sim/       # ModelSim/Questa simulation flow
+│   └── syn/       # Quartus synthesis and programming flow
+├── ips/           # PLL, FIFO, interfaces and platform support
+└── docs/          # Target-board documentation
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
+controleur_memoire/ # Standalone Avalon-MM BRAM controller
+median/             # Median-filter RTL and testbenches
+avalon_if/          # Avalon-MM interface definition
+ExoSim/             # Event-driven simulation material
+```
 
 ## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+
+This repository is a preserved hardware-design project rather than an actively maintained
+product. It is kept as a technical record of RTL design, multi-clock video pipelines,
+Avalon-MM transactions, simulation and FPGA implementation flow.
